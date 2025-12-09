@@ -1,10 +1,10 @@
 # ============================================
-# FILE: tokens/services.py  (UPDATED)
+# FILE: tokens/services.py  
 # ============================================
 from __future__ import annotations
 
 from typing import Tuple, Optional, Dict, Any
-from decimal import Decimal, InvalidOperation   
+from decimal import Decimal, InvalidOperation
 from django.utils import timezone
 from django.db import transaction
 
@@ -24,7 +24,7 @@ def vend_and_create_token_for_payment(
     is_vend_by_unit: bool,
     payment: PaymentNotification,
     idempotency_key: str,
- ) -> Tuple[bool, Optional[Token], Optional[str]]:
+) -> Tuple[bool, Optional[Token], Optional[str]]:
     """
     Core vending flow used by:
     - M-Pesa webhook
@@ -77,7 +77,8 @@ def vend_and_create_token_for_payment(
         vr.save(update_fields=["attempt_count", "sent_at", "status"])
 
         # 3. Call Stronpower Vending
-        # IMPORTANT: we treat the second item as a *payload* that may be dict or string
+        # Now vending_meter returns the FULL JSON payload (list/dict),
+        # not just the token string.
         ok, vend_payload, error = stronpower.vending_meter(
             client_credentials=credentials,
             meter_id=meter.meter_id,
@@ -86,27 +87,43 @@ def vend_and_create_token_for_payment(
             customer_id=customer.customer_id,
         )
 
-        token_value = None
-        units = None
+        token_value: Optional[str] = None
+        units: Optional[Decimal] = None
 
         if ok and vend_payload:
-            # Case 1: vend_payload is a dict with Token & Unit fields
-            if isinstance(vend_payload, dict):
-                token_value = (
-                    vend_payload.get("Token")
-                    or vend_payload.get("token")
-                    or vend_payload.get("TokenNo")
-                )
-                raw_units = vend_payload.get("Unit") or vend_payload.get("units")
+            # Stronpower usually returns a one-element list with a dict
+            # [{
+            #   "Token": "...",
+            #   "Total_unit": "0.1",
+            #   "Unit": "m³",
+            #   ...
+            # }]
+            payload_obj: Any = vend_payload
+            if isinstance(payload_obj, list) and payload_obj:
+                payload_obj = payload_obj[0]
 
+            if isinstance(payload_obj, dict):
+                token_value = (
+                    payload_obj.get("Token")
+                    or payload_obj.get("token")
+                    or payload_obj.get("TokenNo")
+                    or payload_obj.get("TokenNo1")
+                )
+
+                raw_units = (
+                    payload_obj.get("Total_unit")
+                    or payload_obj.get("total_unit")
+                    or payload_obj.get("Units")
+                    or payload_obj.get("units")
+                )
                 if raw_units is not None:
                     try:
                         units = Decimal(str(raw_units))
                     except (InvalidOperation, TypeError):
                         units = None  # fail silently; amount still stored
             else:
-                # Case 2: vend_payload is already the token string
-                token_value = str(vend_payload)
+                # Fallback: treat the whole payload as the token string
+                token_value = str(payload_obj)
 
         if not ok or not token_value:
             vr.status = VendingRequest.FAILED
@@ -136,10 +153,10 @@ def vend_and_create_token_for_payment(
                 customer=customer,
                 payment=payment,
                 amount=amount,
-                units=units,  
+                units=units,
                 is_vend_by_unit=is_vend_by_unit,
                 status=Token.CREATED,
-                issued_by=None,  
+                issued_by=None,
             )
             vr.token = token
 
@@ -168,10 +185,10 @@ def vend_and_create_token_for_payment(
             token.status = Token.DELIVERED
             token.delivered_at = timezone.now()
             token.save(update_fields=["status", "delivered_at"])
-                
-                                   
+
         return True, token, None
-    
+
+
 def _send_token_sms(token: Token) -> bool:
     """
     Send the 'token issued' SMS for a given token.
@@ -190,7 +207,7 @@ def _send_token_sms(token: Token) -> bool:
         return False
 
     sms = SMSService()
-    
+
     context = {
         "meter_id": meter.meter_id,
         "token": token.token_value,
