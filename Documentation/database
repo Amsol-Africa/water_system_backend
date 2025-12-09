@@ -1,0 +1,15 @@
+Run in Git
+
+pg_ctl status
+
+export PATH=$PATH:"/c/Program Files/PostgreSQL/15/bin"
+
+ export DB_NAME=amsolwatervend
+export DB_USER=venduser
+export DB_PASSWORD=venduser
+export DB_HOST=localhost
+export DB_PORT=5432
+
+PGPASSWORD=$DB_PASSWORD psql -U $DB_USER -h $DB_HOST -p $DB_PORT -d $DB_NAME
+
+\l
