@@ -26,12 +26,11 @@ SECRET_KEY = 'django-insecure-gf2snf)7+dk_9zikyi2v*#v!4obvr-#soiyl6g!!41zdys1u(i
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "unsurrendered-duskily-linnie.ngrok-free.dev"]
+ALLOWED_HOSTS = ["amsolwater.amsol.africa", "localhost", "watersystem.amsol.africa"]
 
 
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173'
+    'https://amsolwater.amsol.africa',
 ]
 CORS_ALLOW_CREDENTIALS = True
 
@@ -109,10 +108,10 @@ WSGI_APPLICATION = 'amsol.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'amsolwatervend', # .get from env in pro
-        'USER': 'venduser',
-        'PASSWORD': 'venduser',
-        'HOST': '127.0.0.1', # Use 'localhost' or your DB host
+        'NAME': 'water_system', # .get from env in pro
+        'USER': 'water_system',
+        'PASSWORD': 'Amsolwater@2025!',
+        'HOST': 'localhost', # Use 'localhost' or your DB host
         'PORT': '5432',
         'CONN_MAX_AGE': 60,  # Persistent connections
     }
