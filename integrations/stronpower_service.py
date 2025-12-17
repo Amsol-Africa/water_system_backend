@@ -1,4 +1,5 @@
-# integrations/stronpower_service.py
+## backend/integrations/stronpower_service.py
+# ============================================
 from __future__ import annotations
 from typing import Any, Dict, Tuple, Optional, List, Union
 import requests
@@ -39,14 +40,21 @@ class StronpowerService:
         self, url: str, payload: Dict[str, Any]
     ) -> Tuple[bool, Optional[JsonLike], Optional[str]]:
         try:
+            # DEBUG: log what we are sending
+            print(">>> Stronpower POST", url, "payload=", payload)
             r = requests.post(url, json=payload, timeout=self.timeout)
+            # DEBUG: log raw body
+            print(">>> Stronpower raw response text:", r.text)
             r.raise_for_status()
             try:
                 data = r.json()
             except ValueError:
                 return False, None, "Invalid JSON response from Stronpower"
+            # DEBUG: parsed JSON
+            print(">>> Stronpower parsed JSON:", repr(data))
             return True, data, None
         except requests.RequestException as e:
+            print(">>> Stronpower HTTP error:", e)
             return False, None, str(e)
 
     # -------------------------
@@ -57,14 +65,6 @@ class StronpowerService:
     ) -> Tuple[bool, Optional[JsonLike], Optional[str]]:
         """
         Calls: POST /api/QueryMeterInfo
-
-        Body:
-        {
-          "CompanyName": "DicksonAbukal",
-          "UserName": "Prepaid",
-          "PassWord": "147369",
-          "MeterId": "58000185726"
-        }
         """
         url = f"{self.BASE_URL_NEWV}/QueryMeterInfo"
         payload = {
@@ -95,8 +95,8 @@ class StronpowerService:
 
     # -------------------------
     # 2.8 VendingMeter (normal)
-    # This is the method your IssueTokenView expects:
-    #   success, token_value, error = stronpower.vending_meter(...)
+    # IMPORTANT: now returns the FULL JSON payload (list/dict),
+    # not just the token string.
     # -------------------------
     def vending_meter(
         self,
@@ -105,7 +105,7 @@ class StronpowerService:
         amount,
         is_vend_by_unit: bool,
         customer_id: Optional[str] = None,
-    ) -> Tuple[bool, Optional[str], Optional[str]]:
+    ) -> Tuple[bool, Optional[JsonLike], Optional[str]]:
         """
         Calls: POST /api/VendingMeter
 
@@ -119,7 +119,19 @@ class StronpowerService:
           "Amount": "1700"
         }
 
-        Returns: (success, token_value, error_message)
+        Returns: (success, payload, error_message)
+
+        Where payload in your case looks like:
+        [
+          {
+            "Token": "4948 8974 ...",
+            "Total_unit": "0.1",
+            "Unit": "m³",
+            "Total_paid": "20.00",
+            "Price": "200.00",
+            ...
+          }
+        ]
         """
         url = f"{self.BASE_URL_NEWV}/VendingMeter"
         payload: Dict[str, Any] = {
@@ -136,36 +148,12 @@ class StronpowerService:
             payload["CustomerId"] = customer_id
 
         ok, data, error = self._post(url, payload)
-        if not ok:
-            return False, None, error
+        ## print(">>> VendingMeter data:", repr(data), "error:", error)  # DEBUG
+        return ok, data, error
 
-        # Try to extract a token from the response
-        token_value: Optional[str] = None
-
-        if isinstance(data, list) and data:
-            first = data[0]
-            if isinstance(first, dict):
-                token_value = (
-                    first.get("Token")
-                    or first.get("TokenNo")
-                    or first.get("TokenNo1")
-                    or str(first)
-                )
-            else:
-                token_value = str(first)
-        elif isinstance(data, dict):
-            token_value = (
-                data.get("Token")
-                or data.get("TokenNo")
-                or data.get("TokenNo1")
-                or str(data)
-            )
-        else:
-            token_value = str(data)
-
-        return True, token_value, None
-
-    # Optional: keep your old simple method as a thin alias if you still use it anywhere
+    # -------------------------
+    # Legacy helper, kept for completeness
+    # -------------------------
     def vend(
         self,
         credentials: Dict[str, str],
@@ -190,8 +178,6 @@ class StronpowerService:
 
     # -------------------------
     # 2.1 ClearCredit
-    # NOTE: signature matches ClearCreditView:
-    #   stronpower.clear_credit(client_credentials=..., meter_id=..., customer_id=...)
     # -------------------------
     def clear_credit(
         self,
@@ -201,15 +187,6 @@ class StronpowerService:
     ) -> Tuple[bool, Optional[str], Optional[str]]:
         """
         Calls: POST /api/ClearCredit
-
-        Body:
-        {
-          "CompanyName": "...",
-          "UserName": "...",
-          "PassWord": "...",
-          "CustomerId": "0001",
-          "METER_ID": "58100000007"
-        }
         """
         url = f"{self.BASE_URL_NEWV}/ClearCredit"
         payload = {
@@ -236,8 +213,6 @@ class StronpowerService:
 
     # -------------------------
     # 2.3 ClearTamper
-    # NOTE: signature matches ClearTamperView:
-    #   stronpower.clear_tamper(client_credentials=..., meter_id=..., customer_id=...)
     # -------------------------
     def clear_tamper(
         self,
@@ -247,15 +222,6 @@ class StronpowerService:
     ) -> Tuple[bool, Optional[str], Optional[str]]:
         """
         Calls: POST /api/ClearTamper
-
-        Body:
-        {
-          "CompanyName": "...",
-          "UserName": "...",
-          "PassWord": "...",
-          "CustomerId": "0001",
-          "METER_ID": "58100000007"
-        }
         """
         url = f"{self.BASE_URL_NEWV}/ClearTamper"
         payload = {

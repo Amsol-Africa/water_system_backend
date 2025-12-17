@@ -1,14 +1,18 @@
 # ============================================
-# FILE 6: tokens/views.py
+# FILE: tokens/views.py
 # ============================================
+from decimal import Decimal, InvalidOperation
+
 from django.shortcuts import render
+from django.utils import timezone
+
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
-from django.utils import timezone
+
 from .models import Token
 from meters.models import Meter
 from .services import _send_token_sms
@@ -27,7 +31,13 @@ class TokenListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated, IsClientMember]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'token_type', 'meter', 'customer']
-    search_fields = ['token_value', 'meter__meter_id', 'customer__name', 'customer__phone', 'payment__mpesa_transaction_id']
+    search_fields = [
+        'token_value',
+        'meter__meter_id',
+        'customer__name',
+        'customer__phone',
+        'payment__mpesa_transaction_id',
+    ]
     ordering_fields = ['created_at']
     ordering = ['-created_at']
     
@@ -55,7 +65,7 @@ class TokenRetrieveView(generics.RetrieveAPIView):
 
 
 class IssueTokenView(APIView):
-    """Issue a vending token"""
+    """Issue a vending token (manual vending from the UI)"""
     permission_classes = [IsAuthenticated, IsClientMember]
     
     def post(self, request):
@@ -75,50 +85,81 @@ class IssueTokenView(APIView):
             
             # Call Stronpower API
             stronpower = StronpowerService()
-            success, token_value, error = stronpower.vending_meter(
+            success, vend_payload, error = stronpower.vending_meter(
                 client_credentials=credentials,
                 meter_id=meter.meter_id,
                 amount=serializer.validated_data['amount'],
                 is_vend_by_unit=serializer.validated_data['is_vend_by_unit'],
                 customer_id=customer.customer_id
             )
-            
-            if success:
-                # Create token record
-                token = Token.objects.create(
-                    token_value=token_value,
-                    token_type=Token.VENDING,
-                    meter=meter,
-                    customer=customer,
-                    amount=serializer.validated_data['amount'],
-                    is_vend_by_unit=serializer.validated_data['is_vend_by_unit'],
-                    issued_by=request.user,
-                    status=Token.CREATED
-                )
 
-                # 🔔 Send SMS with token
-                sms_ok = _send_token_sms(token)
-                if sms_ok and token.status != Token.DELIVERED:
-                    token.status = Token.DELIVERED
-                    token.delivered_at = timezone.now()
-                    token.save(update_fields=["status", "delivered_at"])
-                
+            token_value = None
+            units = None
+
+            if success and vend_payload:
+                # Same shape as in vend_and_create_token_for_payment:
+                # usually a list with a single dict.
+                payload_obj = vend_payload
+                if isinstance(payload_obj, list) and payload_obj:
+                    payload_obj = payload_obj[0]
+
+                if isinstance(payload_obj, dict):
+                    token_value = (
+                        payload_obj.get("Token")
+                        or payload_obj.get("token")
+                        or payload_obj.get("TokenNo")
+                        or payload_obj.get("TokenNo1")
+                    )
+                    raw_units = (
+                        payload_obj.get("Total_unit")
+                        or payload_obj.get("total_unit")
+                        or payload_obj.get("Units")
+                        or payload_obj.get("units")
+                    )
+                    if raw_units is not None:
+                        try:
+                            units = Decimal(str(raw_units))
+                        except (InvalidOperation, TypeError):
+                            units = None
+                else:
+                    token_value = str(payload_obj)
+
+            if not success or not token_value:
                 return Response(
-                    TokenSerializer(token).data,
-                    status=status.HTTP_201_CREATED
-                )
-            else:
-                return Response(
-                    {'error': error},
+                    {'error': error or 'Vending failed'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            
+            # Create token record
+            token = Token.objects.create(
+                token_value=token_value,
+                token_type=Token.VENDING,
+                meter=meter,
+                customer=customer,
+                amount=serializer.validated_data['amount'],
+                units=units,
+                is_vend_by_unit=serializer.validated_data['is_vend_by_unit'],
+                issued_by=request.user,
+                status=Token.CREATED
+            )
+
+            # 🔔 Send SMS with token
+            sms_ok = _send_token_sms(token)
+            if sms_ok and token.status != Token.DELIVERED:
+                token.status = Token.DELIVERED
+                token.delivered_at = timezone.now()
+                token.save(update_fields=["status", "delivered_at"])
+            
+            return Response(
+                TokenSerializer(token).data,
+                status=status.HTTP_201_CREATED
+            )
         
         except (Meter.DoesNotExist, Customer.DoesNotExist):
             return Response(
                 {'error': 'Meter or Customer not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-
 
 
 class ClearCreditView(APIView):
@@ -175,6 +216,7 @@ class ClearCreditView(APIView):
                 {'error': 'Meter or Customer not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
 
 class ClearTamperView(APIView):
     """Clear tamper token"""
@@ -278,4 +320,3 @@ class TokenResendSmsView(APIView):
             },
             status=status.HTTP_200_OK if sms_ok else status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
-
