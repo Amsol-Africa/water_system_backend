@@ -58,7 +58,7 @@ def register_c2b_urls(access_token: str):
     require_env("MPESA_VALIDATION_URL")
 
     # Daraja C2B register URL endpoint
-    endpoint = f"{BASE_URL}/mpesa/c2b/v1/registerurl"
+    endpoint = f"{BASE_URL}/mpesa/c2b/v2/registerurl"
 
     headers = {
         "Authorization": f"Bearer {access_token}",

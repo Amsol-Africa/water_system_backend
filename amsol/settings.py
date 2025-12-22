@@ -24,7 +24,7 @@ FIELD_ENCRYPTION_KEY = os.environ.get('FIELD_ENCRYPTION_KEY', "dhikCcOvJdxUVz0BP
 SECRET_KEY = 'django-insecure-gf2snf)7+dk_9zikyi2v*#v!4obvr-#soiyl6g!!41zdys1u(i'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "unsurrendered-duskily-linnie.ngrok-free.dev"]
 
