@@ -1,5 +1,5 @@
 # ============================================
-# FILE 7: amsol/celery.py - Celery Configuration
+# FILE: amsol/celery.py - Celery Configuration
 # ============================================
 import os
 from celery import Celery

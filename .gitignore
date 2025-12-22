@@ -1,0 +1,10 @@
+.env
+.env.local
+.package-lock.json
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.requirements.txt
+env/

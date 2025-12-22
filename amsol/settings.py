@@ -33,6 +33,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173'
 ]
+#CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
 CORS_ALLOW_CREDENTIALS = True
 
 # Application definition
@@ -109,11 +110,11 @@ WSGI_APPLICATION = 'amsol.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'amsolwatervend', # .get from env in pro
-        'USER': 'venduser',
-        'PASSWORD': 'venduser',
-        'HOST': '127.0.0.1', # Use 'localhost' or your DB host
-        'PORT': '5432',
+        'NAME': os.getenv('DB_NAME', 'amsolwatervend'),
+        'USER': os.getenv('DB_USER', 'venduser'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'venduser'),
+        'HOST': os.getenv('DB_HOST', '127.0.0.1'), 
+        'PORT': os.getenv('DB_PORT', '5432'),
         'CONN_MAX_AGE': 60,  # Persistent connections
     }
 }
